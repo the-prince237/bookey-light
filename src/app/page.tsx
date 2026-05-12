@@ -3,7 +3,7 @@ import { useState } from "react";
 import Link from "next/link";
 import { Navbar, PaymentModal, Reveal } from "@/components";
 import { bookData } from "@/data";
-import { formatCurrency } from "@/lib";
+import { formatCurrency } from "@/lib/payments/nokash";
 
 const G    = "#C9953A";
 const GD   = "#0B3D2E";
