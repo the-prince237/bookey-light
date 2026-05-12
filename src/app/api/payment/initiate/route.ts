@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
       i_space_key: i_key,
       app_space_key: app_key,
       order_id,
-      amount: Number(amount),
+      amount: String(amount),
       country,
       payment_method,
       payment_type,
