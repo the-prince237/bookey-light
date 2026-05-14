@@ -3,7 +3,7 @@ export const bookData = {
   subtitle: "Autopsie d'une Puissance Soft-Power",
   author: 'Guy Bertrand MESSINA',
   authorRole: "Économiste · Analyste de l'Innovation Africaine",
-  price: 15000,
+  price: 100,
   currency: 'XAF',
   pages: '400+',
   chapters: 10,
