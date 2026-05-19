@@ -1,19 +1,14 @@
-// ─── NOKASH client-safe helpers ────────────────────────────────────────────────
-// No Node.js imports here — this file is used by both server and client.
-
 export const NOKASH_BASE_URL = 'https://api.nokash.app'
 export const IS_TEST_MODE = !process.env.NOKASH_INTEGRATOR_KEY
 
-// ─── Types ───────────────────────────────────────────────────────────────────
 export type PaymentType = 'CM_MOBILEMONEY' | 'NG_BANKTRANSFER'
 export type PaymentMethod = 'MTN_MOMO' | 'ORANGE_MONEY' | 'EUM' | 'BANK_TRANSFER'
 export type TxStatus = 'PENDING' | 'FAILED' | 'CANCELED' | 'TIMEOUT' | 'SUCCESS'
-
 export type ErrorCategory =
-  | 'UNKNOWN' // *_UNKNOW  — may still succeed, wait for confirmation
-  | 'INTERNAL' // *_ERROR (internal) — wait for confirmation
-  | 'PROVIDER' // *_ERROR (provider unavailable) — fail + can retry
-  | 'BAD_INPUT' // *_BAD_INFOS — fix data before retry
+  | 'UNKNOWN'
+  | 'INTERNAL'
+  | 'PROVIDER'
+  | 'BAD_INPUT'
   | 'NETWORK'
   | 'CONFIG'
 
@@ -40,7 +35,6 @@ export interface StatusData extends PayinData {
   user_bank_code?: string
   user_bank_account?: string
 }
-
 export interface UserData {
   user_phone?: string
   user_email?: string
@@ -49,7 +43,6 @@ export interface UserData {
   user_bank_account?: string
 }
 
-// ─── Payment method catalogue ─────────────────────────────────────────────────
 export interface PaymentMethodDef {
   method: PaymentMethod
   label: string
@@ -104,14 +97,11 @@ export const PAYMENT_METHODS: PaymentMethodDef[] = [
   },
 ]
 
-export function getMethodsForCountry(country: string): PaymentMethodDef[] {
-  return PAYMENT_METHODS.filter((m) => m.country === country)
-}
-export function getMethodDef(method: string): PaymentMethodDef | undefined {
-  return PAYMENT_METHODS.find((m) => m.method === method)
-}
+export const getMethodsForCountry = (country: string) =>
+  PAYMENT_METHODS.filter((m) => m.country === country)
+export const getMethodDef = (method: string) =>
+  PAYMENT_METHODS.find((m) => m.method === method)
 
-// ─── Error categorisation ─────────────────────────────────────────────────────
 export function categoriseError(status: string, message: string): ErrorCategory {
   const s = status.toUpperCase()
   if (s.endsWith('_UNKNOW')) return 'UNKNOWN'
@@ -128,7 +118,6 @@ export function categoriseError(status: string, message: string): ErrorCategory 
   if (s === 'CONFIG_ERROR') return 'CONFIG'
   return 'UNKNOWN'
 }
-
 export function errorAdvice(cat: ErrorCategory): string {
   switch (cat) {
     case 'UNKNOWN':
@@ -136,7 +125,7 @@ export function errorAdvice(cat: ErrorCategory): string {
     case 'INTERNAL':
       return 'Erreur serveur temporaire. Attendez quelques instants avant de réessayer.'
     case 'PROVIDER':
-      return "L'opérateur mobile est temporairement indisponible. Réessayez dans quelques minutes ou choisissez un autre mode de paiement."
+      return "L'opérateur mobile est temporairement indisponible. Réessayez dans quelques minutes ou choisissez un autre mode."
     case 'BAD_INPUT':
       return 'Les informations saisies sont incorrectes. Vérifiez votre numéro et réessayez.'
     case 'NETWORK':
@@ -145,16 +134,10 @@ export function errorAdvice(cat: ErrorCategory): string {
       return 'Configuration API manquante (mode développement).'
   }
 }
-
-export function canRetryImmediately(cat: ErrorCategory): boolean {
-  return cat === 'PROVIDER' || cat === 'BAD_INPUT' || cat === 'NETWORK'
-}
-
-// ─── Shared utilities ─────────────────────────────────────────────────────────
-export function generateOrderId(prefix: string): string {
-  return `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
-}
-
+export const canRetryImmediately = (cat: ErrorCategory) =>
+  cat === 'PROVIDER' || cat === 'BAD_INPUT' || cat === 'NETWORK'
+export const generateOrderId = (prefix: string) =>
+  `${prefix}-${Date.now()}-${Math.random().toString(36).substring(2, 9).toUpperCase()}`
 export function formatCurrency(amount: number, currency = 'XAF'): string {
   if (currency === 'XAF') return `${amount.toLocaleString('fr-FR')} FCFA`
   return `${amount.toLocaleString()} ${currency}`

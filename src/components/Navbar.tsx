@@ -4,55 +4,45 @@ import Link from 'next/link'
 import { usePathname } from 'next/navigation'
 import { Menu, X } from 'lucide-react'
 
+const G = '#C9953A'
+
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false)
-  const [menuOpen, setMenuOpen] = useState(false)
-  const pathname = usePathname()
-
+  const [open, setOpen] = useState(false)
+  const path = usePathname()
   useEffect(() => {
-    const onScroll = () => setScrolled(window.scrollY > 60)
-    window.addEventListener('scroll', onScroll)
-    return () => window.removeEventListener('scroll', onScroll)
+    const f = () => setScrolled(window.scrollY > 60)
+    window.addEventListener('scroll', f)
+    return () => window.removeEventListener('scroll', f)
   }, [])
-
-  // close menu on route change
-  useEffect(() => {
-    setMenuOpen(false)
-  }, [pathname])
-
-  const isBook = pathname === '/' || pathname === '/livre'
-  const isMusic = pathname.startsWith('/music')
-
-  const navLink = (href: string, label: string, active: boolean) => (
+  useEffect(() => setOpen(false), [path])
+  const isActive = (p: string) => (p === '/' ? path === '/' : path.startsWith(p))
+  const navLink = (href: string, label: string) => (
     <Link
       href={href}
       style={{
-        fontFamily: 'Raleway, sans-serif',
+        fontFamily: 'Raleway',
         fontWeight: 600,
         fontSize: 11,
         letterSpacing: 3,
-        textTransform: 'uppercase',
+        textTransform: 'uppercase' as const,
         textDecoration: 'none',
-        color: active ? '#C9953A' : 'rgba(245,240,232,0.6)',
-        borderBottom: active ? '1px solid #C9953A' : '1px solid transparent',
+        color: isActive(href) ? G : 'rgba(245,240,232,.55)',
+        borderBottom: isActive(href) ? '1px solid ' + G : '1px solid transparent',
         paddingBottom: 2,
-        transition: 'color 0.2s',
-        whiteSpace: 'nowrap',
+        transition: 'color .2s',
+        whiteSpace: 'nowrap' as const,
       }}
     >
       {label}
     </Link>
   )
-
   return (
     <>
-      {/* Fixed colour bar */}
       <div
         className="flag-bar"
         style={{ position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50 }}
       />
-
-      {/* Nav bar */}
       <nav
         style={{
           position: 'fixed',
@@ -61,67 +51,71 @@ export default function Navbar() {
           right: 0,
           zIndex: 49,
           padding: scrolled ? '12px 24px' : '16px 24px',
-          background: 'rgba(8,15,13,0.95)',
+          background: 'rgba(8,15,13,.96)',
           backdropFilter: 'blur(12px)',
-          borderBottom: '1px solid rgba(201,149,58,0.12)',
+          borderBottom: '1px solid rgba(201,149,58,.12)',
           display: 'flex',
           justifyContent: 'space-between',
           alignItems: 'center',
-          transition: 'padding 0.3s',
+          transition: 'padding .3s',
         }}
       >
         <Link href="/" style={{ textDecoration: 'none', flexShrink: 0 }}>
           <span
             className="font-bebas"
-            style={{ fontSize: 20, letterSpacing: 3, color: '#C9953A' }}
+            style={{ fontSize: 20, letterSpacing: 3, color: G }}
           >
             PIB ETO&apos;O{' '}
-            <span
-              style={{ color: 'rgba(245,240,232,0.3)', fontSize: 13, letterSpacing: 2 }}
-            >
+            <span style={{ color: 'rgba(245,240,232,.28)', fontSize: 13 }}>
               · MESSINA
             </span>
           </span>
         </Link>
-
-        {/* Desktop links */}
-        <div className="hidden items-center gap-8 lg:flex">
-          {navLink('/', 'Le Livre', isBook)}
-          {navLink('/music', 'Musique', isMusic)}
+        <div
+          className="hide-mobile"
+          style={{ display: 'flex', alignItems: 'center', gap: 28 }}
+        >
+          {navLink('/', 'Le Livre')}
+          {navLink('/boutique', 'Boutique')}
+          {navLink('/musique', 'Musique')}
           <a
             href="/#contact"
             style={{
-              fontFamily: 'Raleway, sans-serif',
+              fontFamily: 'Raleway',
               fontWeight: 800,
               fontSize: 11,
               letterSpacing: 3,
               textTransform: 'uppercase',
               color: '#080F0D',
-              background: '#C9953A',
-              padding: '10px 22px',
+              background: G,
+              padding: '10px 20px',
               textDecoration: 'none',
-              transition: 'background 0.2s',
+              transition: 'background .2s',
               whiteSpace: 'nowrap',
             }}
             onMouseEnter={(e) => (e.currentTarget.style.background = '#E8C06A')}
-            onMouseLeave={(e) => (e.currentTarget.style.background = '#C9953A')}
+            onMouseLeave={(e) => (e.currentTarget.style.background = G)}
           >
             Commander
           </a>
         </div>
-
-        {/* Mobile burger */}
         <button
-          onClick={() => setMenuOpen((o) => !o)}
-          className="flex cursor-pointer border-none bg-none p-1 text-[#C9953A] lg:hidden"
+          onClick={() => setOpen((o) => !o)}
+          className="show-mobile"
+          style={{
+            color: G,
+            background: 'none',
+            border: 'none',
+            cursor: 'pointer',
+            padding: 4,
+            display: 'flex',
+          }}
           aria-label="Menu"
         >
-          {menuOpen ? <X size={24} /> : <Menu size={24} />}
+          {open ? <X size={24} /> : <Menu size={24} />}
         </button>
       </nav>
-
-      {/* Mobile full-screen menu */}
-      {menuOpen && (
+      {open && (
         <div
           style={{
             position: 'fixed',
@@ -129,33 +123,33 @@ export default function Navbar() {
             left: 0,
             right: 0,
             bottom: 0,
-            background: 'rgba(8,15,13,0.98)',
+            background: 'rgba(8,15,13,.98)',
             zIndex: 48,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
             justifyContent: 'center',
-            gap: 44,
+            gap: 40,
           }}
         >
           {[
             { href: '/', label: 'Le Livre' },
-            { href: '/music', label: 'Musique' },
+            { href: '/boutique', label: 'Boutique' },
+            { href: '/musique', label: 'Musique' },
             { href: '/#contact', label: 'Commander' },
           ].map(({ href, label }) => (
             <Link
               key={href}
               href={href}
-              onClick={() => setMenuOpen(false)}
+              onClick={() => setOpen(false)}
               className="font-bebas"
               style={{
                 fontSize: 52,
                 letterSpacing: 4,
                 color: '#F5F0E8',
                 textDecoration: 'none',
-                transition: 'color 0.2s',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.color = '#C9953A')}
+              onMouseEnter={(e) => (e.currentTarget.style.color = G)}
               onMouseLeave={(e) => (e.currentTarget.style.color = '#F5F0E8')}
             >
               {label}

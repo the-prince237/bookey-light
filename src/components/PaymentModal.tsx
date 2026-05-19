@@ -21,19 +21,16 @@ import {
   type ErrorCategory,
 } from '@/lib'
 
-// ─── Types ────────────────────────────────────────────────────────────────────
 interface Props {
   isOpen: boolean
   onClose: () => void
   itemTitle: string
-  itemType: 'book' | 'track' | 'album'
+  itemType: 'book' | 'track' | 'album' | 'digital'
   amount: number
   currency: string
   itemId: string
 }
-
 type Step = 'country' | 'method' | 'form' | 'pending' | 'polling' | 'success' | 'error'
-
 interface FormState {
   user_phone: string
   user_email: string
@@ -42,70 +39,13 @@ interface FormState {
   user_bank_account: string
 }
 
-const POLL_INTERVAL_MS = 4000
-const POLL_MAX_ATTEMPTS = 30 // 2 min max
-
-// ─── Constants ────────────────────────────────────────────────────────────────
 const G = '#C9953A'
 const GD = '#0B3D2E'
 const CRM = '#F5F0E8'
 const DRK = '#080F0D'
+const POLL_INTERVAL = 4000
+const POLL_MAX = 30
 
-// ─── Small sub-components ─────────────────────────────────────────────────────
-function Label({ children }: { children: React.ReactNode }) {
-  return (
-    <p
-      style={{
-        fontFamily: 'Raleway',
-        fontSize: 10,
-        fontWeight: 700,
-        letterSpacing: 3,
-        textTransform: 'uppercase',
-        color: G,
-        marginBottom: 8,
-      }}
-    >
-      {children}
-    </p>
-  )
-}
-function Input({
-  value,
-  onChange,
-  placeholder,
-  type = 'text',
-  pattern,
-}: {
-  value: string
-  onChange: (v: string) => void
-  placeholder?: string
-  type?: string
-  pattern?: string
-}) {
-  return (
-    <input
-      type={type}
-      value={value}
-      placeholder={placeholder}
-      pattern={pattern}
-      onChange={(e) => onChange(e.target.value)}
-      style={{
-        width: '100%',
-        padding: '12px 14px',
-        background: 'rgba(11,61,46,.3)',
-        border: '1px solid rgba(201,149,58,.3)',
-        color: CRM,
-        fontFamily: 'Raleway',
-        fontSize: 15,
-        outline: 'none',
-        letterSpacing: 1,
-        marginBottom: 14,
-      }}
-    />
-  )
-}
-
-// ─── Main component ───────────────────────────────────────────────────────────
 export default function PaymentModal({
   isOpen,
   onClose,
@@ -126,15 +66,15 @@ export default function PaymentModal({
     user_bank_account: '',
   })
   const [orderId, setOrderId] = useState('')
-  const [nokashTxId, setNokashTxId] = useState('')
+  const [nokashTxId, setTxId] = useState('')
   const [txStatus, setTxStatus] = useState('')
   const [errorMsg, setError] = useState('')
   const [errorCat, setErrorCat] = useState<ErrorCategory>('UNKNOWN')
   const [pollCount, setPollCount] = useState(0)
-  const [isTestMode, setIsTestMode] = useState(false)
+  const [isTest, setIsTest] = useState(false)
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null)
 
-  const stopPolling = useCallback(() => {
+  const stopPoll = useCallback(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current)
       pollRef.current = null
@@ -149,46 +89,40 @@ export default function PaymentModal({
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ transaction_id: txId, order_id: oId }),
         })
-        const data = await res.json()
-        if (data.status !== 'REQUEST_OK' || !data.data) return
-        const s = data.data.status as string
+        const d = await res.json()
+        if (d.status !== 'REQUEST_OK' || !d.data) return
+        const s = d.data.status as string
         setTxStatus(s)
         if (s === 'SUCCESS') {
-          stopPolling()
+          stopPoll()
           setStep('success')
         }
         if (s === 'FAILED' || s === 'CANCELED' || s === 'TIMEOUT') {
-          stopPolling()
-          const reason = data.data.statusReason ?? "Le paiement n'a pas abouti."
-          setError(reason)
+          stopPoll()
+          setError(d.data.statusReason ?? "Le paiement n'a pas abouti.")
           setErrorCat('PROVIDER')
           setStep('error')
         }
-      } catch {
-        /* network hiccup — keep polling */
-      }
+      } catch {}
       setPollCount((c) => c + 1)
     },
-    [stopPolling],
+    [stopPoll],
   )
 
-  // Stop polling when max attempts reached
   useEffect(() => {
-    if (pollCount >= POLL_MAX_ATTEMPTS && step === 'polling') {
-      stopPolling()
+    if (pollCount >= POLL_MAX && step === 'polling') {
+      stopPoll()
       setError(
-        "Délai d'attente dépassé. Le paiement est peut-être encore en cours — vérifiez votre téléphone ou contactez le support.",
+        "Délai d'attente dépassé. Vérifiez votre téléphone ou contactez le support.",
       )
       setErrorCat('UNKNOWN')
       setStep('error')
     }
-  }, [pollCount, step, stopPolling])
-
-  // Cleanup on unmount
-  useEffect(() => () => stopPolling(), [stopPolling])
+  }, [pollCount, step, stopPoll])
+  useEffect(() => () => stopPoll(), [stopPoll])
 
   const reset = () => {
-    stopPolling()
+    stopPoll()
     setStep('country')
     setCountry('CM')
     setMethod(null)
@@ -200,166 +134,127 @@ export default function PaymentModal({
       user_bank_account: '',
     })
     setOrderId('')
-    setNokashTxId('')
+    setTxId('')
     setTxStatus('')
     setError('')
     setErrorCat('UNKNOWN')
     setPollCount(0)
-    setIsTestMode(false)
+    setIsTest(false)
   }
   const close = () => {
     reset()
     onClose()
   }
-
   const setField = (k: keyof FormState) => (v: string) =>
     setForm((f) => ({ ...f, [k]: v }))
 
-  // ── Form validation ──────────────────────────────────────────────────────
   const isFormValid = (): boolean => {
     if (!selectedMethod) return false
-    for (const field of selectedMethod.requiredFields) {
-      const val = form[field as keyof FormState]
-      if (!val || val.trim().length < 3) return false
+    for (const f of selectedMethod.requiredFields) {
+      if (!form[f as keyof FormState] || form[f as keyof FormState].trim().length < 3)
+        return false
     }
-    if (selectedMethod.method !== 'BANK_TRANSFER') {
+    if (selectedMethod.method !== 'BANK_TRANSFER')
       return form.user_phone.replace(/\D/g, '').length >= 9
-    }
     return true
   }
 
-  // ── Submit payment ────────────────────────────────────────────────────────
   const handlePay = async () => {
     if (!isFormValid() || !selectedMethod) return
     setStep('pending')
     const oid = generateOrderId(itemType.toUpperCase())
     setOrderId(oid)
-    const paymentPayload = {
-      order_id: oid,
-      amount: String(amount),
-      country,
-      payment_method: selectedMethod.method,
-      payment_type: selectedMethod.type,
-      currency,
-      user_phone: form.user_phone,
-      user_email: form.user_email,
-      user_name: form.user_name,
-      user_bank_code: form.user_bank_code,
-      user_bank_account: form.user_bank_account,
-      item_id: itemId,
-      item_type: itemType,
-    }
-
-    console.log({ paymentPayload })
     try {
       const res = await fetch('/api/payment/initiate', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(paymentPayload),
+        body: JSON.stringify({
+          order_id: oid,
+          amount: String(amount),
+          country,
+          payment_method: selectedMethod.method,
+          payment_type: selectedMethod.type,
+          currency,
+          ...form,
+          item_id: itemId,
+          item_type: itemType,
+        }),
       })
       const data = await res.json()
-      setIsTestMode(!!data._test)
-
+      setIsTest(!!data._test)
       if (data.status === 'REQUEST_OK' && data.data) {
         const txId = data.data.id
-        setNokashTxId(txId)
+        setTxId(txId)
         setTxStatus('PENDING')
         setStep('polling')
-        // Start polling
-        pollRef.current = setInterval(() => pollStatus(txId, oid), POLL_INTERVAL_MS)
-        // First poll immediately
+        pollRef.current = setInterval(() => pollStatus(txId, oid), POLL_INTERVAL)
         pollStatus(txId, oid)
       } else {
-        const cat = categoriseError(data.status, data.message ?? '')
         setError(data.message ?? 'Erreur inconnue.')
-        setErrorCat(cat)
+        setErrorCat(categoriseError(data.status, data.message ?? ''))
         setStep('error')
       }
     } catch {
-      setError('Erreur réseau. Vérifiez votre connexion.')
+      setError('Erreur réseau.')
       setErrorCat('NETWORK')
       setStep('error')
     }
   }
 
   if (!isOpen) return null
-
   const methods = getMethodsForCountry(country)
 
-  // ── Layout helpers ─────────────────────────────────────────────────────────
-  const overlay: React.CSSProperties = {
-    position: 'fixed',
-    inset: 0,
-    background: 'rgba(0,0,0,.9)',
-    backdropFilter: 'blur(10px)',
-    zIndex: 1000,
-    display: 'flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-    padding: 16,
-  }
-  const modal: React.CSSProperties = {
-    background: '#0d1a14',
-    border: '1px solid rgba(201,149,58,.3)',
+  const iStyle: React.CSSProperties = {
     width: '100%',
-    maxWidth: 460,
-    maxHeight: 'calc(100dvh - 32px)',
-    overflowY: 'auto',
-    position: 'relative',
+    padding: '12px 14px',
+    background: 'rgba(11,61,46,.3)',
+    border: '1px solid rgba(201,149,58,.3)',
+    color: CRM,
+    fontFamily: 'Raleway',
+    fontSize: 15,
+    outline: 'none',
+    letterSpacing: 1,
+    marginBottom: 14,
   }
-  const backBtn = (onClick: () => void) => (
-    <button
-      onClick={onClick}
-      style={{
-        background: 'none',
-        border: 'none',
-        color: 'rgba(245,240,232,.38)',
-        cursor: 'pointer',
-        marginBottom: 20,
-        fontSize: 12,
-        display: 'flex',
-        alignItems: 'center',
-        gap: 6,
-        fontFamily: 'Raleway',
-      }}
-    >
-      ← Retour
-    </button>
-  )
-  const primaryBtn = (label: string, onClick: () => void, disabled = false) => (
-    <button
-      onClick={onClick}
-      disabled={disabled}
-      style={{
-        width: '100%',
-        padding: 15,
-        background: disabled ? 'rgba(201,149,58,.25)' : G,
-        color: disabled ? 'rgba(8,15,13,.4)' : DRK,
-        fontFamily: 'Raleway',
-        fontWeight: 800,
-        fontSize: 12,
-        letterSpacing: 3,
-        textTransform: 'uppercase',
-        border: 'none',
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        transition: 'all .2s',
-      }}
-      onMouseEnter={(e) => !disabled && (e.currentTarget.style.background = '#E8C06A')}
-      onMouseLeave={(e) => !disabled && (e.currentTarget.style.background = G)}
-    >
-      {label}
-    </button>
-  )
+  const lStyle: React.CSSProperties = {
+    fontFamily: 'Raleway',
+    fontSize: 10,
+    fontWeight: 700,
+    letterSpacing: 3,
+    textTransform: 'uppercase',
+    color: G,
+    marginBottom: 8,
+    display: 'block',
+  }
 
   return (
-    <div style={overlay} onClick={(e) => e.target === e.currentTarget && close()}>
-      <div style={modal}>
-        {/* Gold bar */}
+    <div
+      style={{
+        position: 'fixed',
+        inset: 0,
+        background: 'rgba(0,0,0,.9)',
+        backdropFilter: 'blur(10px)',
+        zIndex: 1000,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        padding: 16,
+      }}
+      onClick={(e) => e.target === e.currentTarget && close()}
+    >
+      <div
+        style={{
+          background: '#0d1a14',
+          border: '1px solid rgba(201,149,58,.3)',
+          width: '100%',
+          maxWidth: 460,
+          maxHeight: 'calc(100dvh - 32px)',
+          overflowY: 'auto',
+        }}
+      >
         <div
           style={{ height: 4, background: `linear-gradient(90deg,${G},#E8C06A,${G})` }}
         />
-
-        {/* Header */}
         <div
           style={{
             padding: '20px 22px 16px',
@@ -382,7 +277,7 @@ export default function PaymentModal({
                 marginBottom: 4,
               }}
             >
-              Paiement sécurisé · NOKASH{isTestMode && ' (mode test)'}
+              Paiement sécurisé · NOKASH{isTest ? ' (test)' : ''}
             </p>
             <h3
               style={{
@@ -418,14 +313,11 @@ export default function PaymentModal({
               border: 'none',
               cursor: 'pointer',
               flexShrink: 0,
-              marginTop: 2,
             }}
           >
             <X size={20} />
           </button>
         </div>
-
-        {/* Progress dots */}
         {!['success', 'error'].includes(step) && (
           <div
             style={{
@@ -436,29 +328,23 @@ export default function PaymentModal({
             }}
           >
             {(['country', 'method', 'form', 'pending', 'polling'] as Step[]).map(
-              (s, i) => {
-                const steps: Step[] = ['country', 'method', 'form', 'pending', 'polling']
-                const active = steps.indexOf(step) >= i
-                return (
-                  <div
-                    key={s}
-                    style={{
-                      width: 6,
-                      height: 6,
-                      borderRadius: '50%',
-                      background: active ? G : 'rgba(201,149,58,.2)',
-                      transition: 'background .3s',
-                    }}
-                  />
-                )
-              },
+              (s, i, arr) => (
+                <div
+                  key={s}
+                  style={{
+                    width: 6,
+                    height: 6,
+                    borderRadius: '50%',
+                    background: arr.indexOf(step) >= i ? G : 'rgba(201,149,58,.2)',
+                    transition: 'background .3s',
+                  }}
+                />
+              ),
             )}
           </div>
         )}
-
-        {/* Body */}
         <div style={{ padding: '22px' }}>
-          {/* ── STEP: Country ── */}
+          {/* Country */}
           {step === 'country' && (
             <div>
               <p
@@ -468,8 +354,8 @@ export default function PaymentModal({
                   fontWeight: 700,
                   letterSpacing: 3,
                   textTransform: 'uppercase',
-                  color: 'rgba(245,240,232,.45)',
-                  marginBottom: 18,
+                  color: 'rgba(245,240,232,.4)',
+                  marginBottom: 16,
                 }}
               >
                 Votre pays
@@ -500,7 +386,7 @@ export default function PaymentModal({
                     style={{
                       display: 'flex',
                       alignItems: 'center',
-                      gap: 16,
+                      gap: 14,
                       padding: '14px 18px',
                       background: 'rgba(11,61,46,.3)',
                       border: '1px solid rgba(201,149,58,.2)',
@@ -548,11 +434,23 @@ export default function PaymentModal({
               </div>
             </div>
           )}
-
-          {/* ── STEP: Method ── */}
+          {/* Method */}
           {step === 'method' && (
             <div>
-              {backBtn(() => setStep('country'))}
+              <button
+                onClick={() => setStep('country')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(245,240,232,.38)',
+                  cursor: 'pointer',
+                  marginBottom: 18,
+                  fontSize: 12,
+                  fontFamily: 'Raleway',
+                }}
+              >
+                ← Retour
+              </button>
               <p
                 style={{
                   fontFamily: 'Raleway',
@@ -560,8 +458,8 @@ export default function PaymentModal({
                   fontWeight: 700,
                   letterSpacing: 3,
                   textTransform: 'uppercase',
-                  color: 'rgba(245,240,232,.45)',
-                  marginBottom: 18,
+                  color: 'rgba(245,240,232,.4)',
+                  marginBottom: 16,
                 }}
               >
                 Mode de paiement
@@ -634,7 +532,7 @@ export default function PaymentModal({
                       >
                         {m.type === 'NG_BANKTRANSFER'
                           ? 'Compte bancaire nigérian'
-                          : 'Mobile Money · Cameroun'}
+                          : 'Mobile Money'}
                       </p>
                     </div>
                     <span style={{ marginLeft: 'auto', color: G }}>›</span>
@@ -643,11 +541,23 @@ export default function PaymentModal({
               </div>
             </div>
           )}
-
-          {/* ── STEP: Form ── */}
+          {/* Form */}
           {step === 'form' && selectedMethod && (
             <div>
-              {backBtn(() => setStep('method'))}
+              <button
+                onClick={() => setStep('method')}
+                style={{
+                  background: 'none',
+                  border: 'none',
+                  color: 'rgba(245,240,232,.38)',
+                  cursor: 'pointer',
+                  marginBottom: 18,
+                  fontSize: 12,
+                  fontFamily: 'Raleway',
+                }}
+              >
+                ← Retour
+              </button>
               <p
                 style={{
                   fontFamily: 'Raleway',
@@ -655,22 +565,23 @@ export default function PaymentModal({
                   fontWeight: 700,
                   letterSpacing: 3,
                   textTransform: 'uppercase',
-                  color: 'rgba(245,240,232,.45)',
+                  color: 'rgba(245,240,232,.4)',
                   marginBottom: 18,
                 }}
               >
                 {selectedMethod.flag} {selectedMethod.label}
               </p>
-
-              {/* Mobile Money form */}
               {selectedMethod.type === 'CM_MOBILEMONEY' && (
                 <>
-                  <Label>Numéro de téléphone</Label>
-                  <Input
-                    value={form.user_phone}
-                    onChange={setField('user_phone')}
+                  <label style={lStyle}>Numéro de téléphone</label>
+                  <input
                     type="tel"
+                    value={form.user_phone}
+                    onChange={(e) =>
+                      setField('user_phone')(e.target.value.replace(/[^0-9]/g, ''))
+                    }
                     placeholder={selectedMethod.placeholder?.user_phone}
+                    style={iStyle}
                   />
                   <p
                     style={{
@@ -681,40 +592,40 @@ export default function PaymentModal({
                       lineHeight: 1.6,
                     }}
                   >
-                    💡 Format international : 237XXXXXXXXX
-                    <br />
-                    Vous recevrez une notification USSD sur votre téléphone.
+                    💡 Format : 237XXXXXXXXX — Vous recevrez une notification USSD.
                   </p>
                 </>
               )}
-
-              {/* Bank Transfer form */}
               {selectedMethod.type === 'NG_BANKTRANSFER' && (
                 <>
-                  <Label>Nom complet</Label>
-                  <Input
+                  <label style={lStyle}>Nom complet</label>
+                  <input
                     value={form.user_name}
-                    onChange={setField('user_name')}
+                    onChange={(e) => setField('user_name')(e.target.value)}
                     placeholder={selectedMethod.placeholder?.user_name}
+                    style={iStyle}
                   />
-                  <Label>Adresse email</Label>
-                  <Input
-                    value={form.user_email}
-                    onChange={setField('user_email')}
+                  <label style={lStyle}>Adresse email</label>
+                  <input
                     type="email"
+                    value={form.user_email}
+                    onChange={(e) => setField('user_email')(e.target.value)}
                     placeholder={selectedMethod.placeholder?.user_email}
+                    style={iStyle}
                   />
-                  <Label>Code bancaire</Label>
-                  <Input
+                  <label style={lStyle}>Code bancaire</label>
+                  <input
                     value={form.user_bank_code}
-                    onChange={setField('user_bank_code')}
+                    onChange={(e) => setField('user_bank_code')(e.target.value)}
                     placeholder={selectedMethod.placeholder?.user_bank_code}
+                    style={iStyle}
                   />
-                  <Label>Numéro de compte</Label>
-                  <Input
+                  <label style={lStyle}>Numéro de compte</label>
+                  <input
                     value={form.user_bank_account}
-                    onChange={setField('user_bank_account')}
+                    onChange={(e) => setField('user_bank_account')(e.target.value)}
                     placeholder={selectedMethod.placeholder?.user_bank_account}
+                    style={iStyle}
                   />
                   <p
                     style={{
@@ -725,32 +636,47 @@ export default function PaymentModal({
                       lineHeight: 1.6,
                     }}
                   >
-                    💡 Un compte virtuel (VA) vous sera attribué pour ce paiement.
+                    💡 Un compte virtuel vous sera attribué.
                   </p>
                 </>
               )}
-
-              {primaryBtn(
-                `Payer ${formatCurrency(amount, currency)}`,
-                handlePay,
-                !isFormValid(),
-              )}
+              <button
+                onClick={handlePay}
+                disabled={!isFormValid()}
+                style={{
+                  width: '100%',
+                  padding: 15,
+                  background: isFormValid() ? G : 'rgba(201,149,58,.25)',
+                  color: isFormValid() ? DRK : 'rgba(8,15,13,.4)',
+                  fontFamily: 'Raleway',
+                  fontWeight: 800,
+                  fontSize: 12,
+                  letterSpacing: 3,
+                  textTransform: 'uppercase',
+                  border: 'none',
+                  cursor: isFormValid() ? 'pointer' : 'not-allowed',
+                  transition: 'all .2s',
+                }}
+                onMouseEnter={(e) => {
+                  if (isFormValid()) e.currentTarget.style.background = '#E8C06A'
+                }}
+                onMouseLeave={(e) => {
+                  if (isFormValid()) e.currentTarget.style.background = G
+                }}
+              >
+                Payer {formatCurrency(amount, currency)}
+              </button>
             </div>
           )}
-
-          {/* ── STEP: Pending (initial request) ── */}
+          {/* Pending */}
           {step === 'pending' && (
             <div style={{ textAlign: 'center', padding: '28px 0' }}>
               <div
                 style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}
               >
-                <Loader
-                  size={48}
-                  color={G}
-                  style={{ animation: 'spin 1s linear infinite' }}
-                />
+                <Loader size={48} color={G} className="spin" />
               </div>
-              <style>{`@keyframes spin { from{transform:rotate(0deg)} to{transform:rotate(360deg)} }`}</style>
+              <style>{`@keyframes spin{from{transform:rotate(0deg)}to{transform:rotate(360deg)}}`}</style>
               <p
                 style={{
                   fontFamily: 'Bebas Neue,cursive',
@@ -775,8 +701,7 @@ export default function PaymentModal({
               </p>
             </div>
           )}
-
-          {/* ── STEP: Polling ── */}
+          {/* Polling */}
           {step === 'polling' && (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
               <div
@@ -826,14 +751,14 @@ export default function PaymentModal({
                   fontSize: 15,
                   color: 'rgba(245,240,232,.6)',
                   lineHeight: 1.7,
-                  marginBottom: 24,
+                  marginBottom: 20,
                 }}
               >
                 Vérifiez votre téléphone et confirmez la demande USSD.
                 <br />
                 Cette page se met à jour automatiquement.
               </p>
-              {isTestMode && (
+              {isTest && (
                 <div
                   style={{
                     background: 'rgba(201,149,58,.08)',
@@ -842,15 +767,8 @@ export default function PaymentModal({
                     marginBottom: 16,
                   }}
                 >
-                  <p
-                    style={{
-                      fontFamily: 'Raleway',
-                      fontSize: 11,
-                      color: G,
-                      letterSpacing: 1,
-                    }}
-                  >
-                    Mode test — confirmation simulée dans ~12 secondes
+                  <p style={{ fontFamily: 'Raleway', fontSize: 11, color: G }}>
+                    Mode test — confirmation dans ~12 secondes
                   </p>
                 </div>
               )}
@@ -861,7 +779,7 @@ export default function PaymentModal({
                   padding: '12px 16px',
                   background: 'rgba(11,61,46,.3)',
                   border: '1px solid rgba(201,149,58,.1)',
-                  marginBottom: 16,
+                  marginBottom: 12,
                 }}
               >
                 <span
@@ -894,7 +812,7 @@ export default function PaymentModal({
                     color: 'rgba(245,240,232,.2)',
                     letterSpacing: 1,
                     wordBreak: 'break-all',
-                    marginBottom: 16,
+                    marginBottom: 12,
                   }}
                 >
                   Réf : {nokashTxId}
@@ -907,12 +825,11 @@ export default function PaymentModal({
                   color: 'rgba(245,240,232,.28)',
                 }}
               >
-                Vérification {pollCount}/{POLL_MAX_ATTEMPTS}
+                Vérification {pollCount}/{POLL_MAX}
               </p>
             </div>
           )}
-
-          {/* ── STEP: Success ── */}
+          {/* Success */}
           {step === 'success' && (
             <div style={{ textAlign: 'center', padding: '28px 0' }}>
               <div
@@ -938,11 +855,10 @@ export default function PaymentModal({
                   fontSize: 16,
                   color: 'rgba(245,240,232,.65)',
                   lineHeight: 1.7,
-                  marginBottom: 20,
+                  marginBottom: 16,
                 }}
               >
-                Votre paiement a été confirmé avec succès. Vous allez recevoir les
-                instructions de livraison.
+                Votre paiement a été confirmé avec succès.
               </p>
               {nokashTxId && (
                 <p
@@ -950,7 +866,7 @@ export default function PaymentModal({
                     fontFamily: 'Raleway',
                     fontSize: 9,
                     color: 'rgba(245,240,232,.22)',
-                    marginBottom: 8,
+                    marginBottom: 6,
                     wordBreak: 'break-all',
                   }}
                 >
@@ -963,7 +879,7 @@ export default function PaymentModal({
                     fontFamily: 'Raleway',
                     fontSize: 9,
                     color: 'rgba(245,240,232,.22)',
-                    marginBottom: 28,
+                    marginBottom: 24,
                     wordBreak: 'break-all',
                   }}
                 >
@@ -974,7 +890,7 @@ export default function PaymentModal({
                 style={{
                   background: 'rgba(34,197,94,.08)',
                   border: '1px solid rgba(34,197,94,.2)',
-                  padding: '16px',
+                  padding: 16,
                   marginBottom: 24,
                 }}
               >
@@ -986,8 +902,8 @@ export default function PaymentModal({
                     lineHeight: 1.5,
                   }}
                 >
-                  📧 Contactez <strong>info@falamoi.com</strong> avec votre référence de
-                  commande pour recevoir votre accès.
+                  📧 Contactez <strong>info@falamoi.com</strong> avec votre référence pour
+                  recevoir votre produit.
                 </p>
               </div>
               <button
@@ -1009,8 +925,7 @@ export default function PaymentModal({
               </button>
             </div>
           )}
-
-          {/* ── STEP: Error ── */}
+          {/* Error */}
           {step === 'error' && (
             <div style={{ textAlign: 'center', padding: '24px 0' }}>
               <div
@@ -1029,8 +944,6 @@ export default function PaymentModal({
               >
                 Paiement échoué
               </p>
-
-              {/* Categorised advice */}
               <div
                 style={{
                   background: 'rgba(206,17,38,.08)',
@@ -1080,7 +993,6 @@ export default function PaymentModal({
                   </p>
                 )}
               </div>
-
               <div
                 style={{
                   display: 'flex',
@@ -1108,7 +1020,8 @@ export default function PaymentModal({
                       gap: 8,
                     }}
                   >
-                    <RefreshCw size={13} /> Réessayer
+                    <RefreshCw size={13} />
+                    Réessayer
                   </button>
                 )}
                 <button
@@ -1129,7 +1042,6 @@ export default function PaymentModal({
                   Fermer
                 </button>
               </div>
-
               {(errorCat === 'UNKNOWN' || errorCat === 'INTERNAL') && (
                 <p
                   style={{
@@ -1141,8 +1053,8 @@ export default function PaymentModal({
                   }}
                 >
                   Ne relancez pas encore. Contactez{' '}
-                  <strong style={{ color: G }}>info@falamoi.com</strong> avec votre
-                  référence :<br />
+                  <strong style={{ color: G }}>info@falamoi.com</strong>
+                  <br />
                   <span style={{ fontSize: 10, wordBreak: 'break-all' }}>
                     {orderId || '—'}
                   </span>
@@ -1151,8 +1063,6 @@ export default function PaymentModal({
             </div>
           )}
         </div>
-
-        {/* Footer */}
         <div
           style={{
             padding: '10px 22px',

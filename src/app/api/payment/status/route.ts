@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { NOKASH_BASE_URL, IS_TEST_MODE, type TxStatus } from '@/lib'
 import { getOrder, updateOrderStatus } from '@/lib/orders'
-import { IS_TEST_MODE, NOKASH_BASE_URL, type TxStatus } from '@/lib'
 
 export async function POST(req: NextRequest) {
   try {
@@ -10,8 +10,6 @@ export async function POST(req: NextRequest) {
         { status: 'REQUEST_BAD_INFOS', message: 'transaction_id requis', data: null },
         { status: 400 },
       )
-
-    // ── Test mode: simulate progression ──────────────────────────────────
     if (IS_TEST_MODE) {
       const order = order_id ? getOrder(order_id) : null
       const elapsed =
@@ -31,26 +29,23 @@ export async function POST(req: NextRequest) {
         },
       })
     }
-
-    // ── Production: ask NOKASH ─────────────────────────────────────────────
     const res = await fetch(
       `${NOKASH_BASE_URL}/lapas-on-trans/trans/310/status-request?transaction_id=${transaction_id}`,
       { method: 'POST' },
     )
     const data = await res.json()
-    if (data.status === 'REQUEST_OK' && data.data && order_id) {
+    if (data.status === 'REQUEST_OK' && data.data && order_id)
       updateOrderStatus(
         order_id,
         data.data.status as TxStatus,
         transaction_id,
         data.data.statusReason ?? null,
       )
-    }
     return NextResponse.json(data)
-  } catch (err) {
-    console.error('[status]', err)
+  } catch (e) {
+    console.error('[status]', e)
     return NextResponse.json(
-      { status: 'SERVER_ERROR', message: 'Erreur serveur interne', data: null },
+      { status: 'SERVER_ERROR', message: 'Erreur serveur', data: null },
       { status: 500 },
     )
   }

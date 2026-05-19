@@ -1,16 +1,13 @@
-// Server-only — order persistence
-// swap readFileSync for Postgres/Vercel KV/Redis in production
 import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'fs'
 import { join } from 'path'
-import type { TxStatus } from '../payments'
+import { TxStatus } from '../payments'
 
 export type OrderStatus = 'INITIATED' | TxStatus
-
 export interface Order {
   orderId: string
   nokashTxId: string | null
   itemId: string
-  itemType: 'book' | 'track' | 'album'
+  itemType: 'book' | 'track' | 'album' | 'digital'
   amount: number
   currency: string
   country: string
@@ -25,54 +22,49 @@ export interface Order {
   updatedAt: string
 }
 
-const ORDERS_DIR = join(process.cwd(), '.orders')
-const ORDERS_FILE = join(ORDERS_DIR, 'orders.json')
-
-function readOrders(): Record<string, Order> {
+const DIR = join(process.cwd(), '.orders')
+const FILE = join(DIR, 'orders.json')
+function read(): Record<string, Order> {
   try {
-    if (!existsSync(ORDERS_DIR)) mkdirSync(ORDERS_DIR, { recursive: true })
-    if (!existsSync(ORDERS_FILE)) return {}
-    return JSON.parse(readFileSync(ORDERS_FILE, 'utf-8'))
+    if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true })
+    if (!existsSync(FILE)) return {}
+    return JSON.parse(readFileSync(FILE, 'utf-8'))
   } catch {
     return {}
   }
 }
-
-function writeOrders(orders: Record<string, Order>): void {
+function write(o: Record<string, Order>) {
   try {
-    if (!existsSync(ORDERS_DIR)) mkdirSync(ORDERS_DIR, { recursive: true })
-    writeFileSync(ORDERS_FILE, JSON.stringify(orders, null, 2))
+    if (!existsSync(DIR)) mkdirSync(DIR, { recursive: true })
+    writeFileSync(FILE, JSON.stringify(o, null, 2))
   } catch (e) {
-    console.error('[Orders] write error:', e)
+    console.error('[Orders]', e)
   }
 }
 
-export function saveOrder(order: Order): void {
-  const all = readOrders()
-  all[order.orderId] = order
-  writeOrders(all)
+export const saveOrder = (o: Order) => {
+  const a = read()
+  a[o.orderId] = o
+  write(a)
 }
-export function getOrder(orderId: string): Order | null {
-  return readOrders()[orderId] ?? null
-}
-export function getOrderByNokashId(nokashTxId: string): Order | null {
-  return Object.values(readOrders()).find((o) => o.nokashTxId === nokashTxId) ?? null
-}
+export const getOrder = (id: string): Order | null => read()[id] ?? null
+export const getOrderByNokashId = (txId: string): Order | null =>
+  Object.values(read()).find((o) => o.nokashTxId === txId) ?? null
 export function updateOrderStatus(
   orderId: string,
   status: OrderStatus,
   nokashTxId?: string,
   statusReason?: string | null,
 ): Order | null {
-  const all = readOrders()
-  if (!all[orderId]) return null
-  all[orderId] = {
-    ...all[orderId],
+  const a = read()
+  if (!a[orderId]) return null
+  a[orderId] = {
+    ...a[orderId],
     status,
-    statusReason: statusReason ?? all[orderId].statusReason,
-    nokashTxId: nokashTxId ?? all[orderId].nokashTxId,
+    statusReason: statusReason ?? a[orderId].statusReason,
+    nokashTxId: nokashTxId ?? a[orderId].nokashTxId,
     updatedAt: new Date().toISOString(),
   }
-  writeOrders(all)
-  return all[orderId]
+  write(a)
+  return a[orderId]
 }
