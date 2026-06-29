@@ -77,7 +77,7 @@ export default function Navbar() {
         >
           {navLink('/', 'Le Livre')}
           {navLink('/boutique', 'Boutique')}
-          {navLink('/musique', 'Musique')}
+          {navLink('/music', 'Musique')}
           <a
             href="/#contact"
             style={{
@@ -135,7 +135,7 @@ export default function Navbar() {
           {[
             { href: '/', label: 'Le Livre' },
             { href: '/boutique', label: 'Boutique' },
-            { href: '/musique', label: 'Musique' },
+            { href: '/music', label: 'Musique' },
             { href: '/#contact', label: 'Commander' },
           ].map(({ href, label }) => (
             <Link

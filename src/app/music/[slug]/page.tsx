@@ -200,7 +200,7 @@ export default function TrackPage({ params }: Props) {
               }}
             >
               <Link
-                href="/musique"
+                href="/music"
                 style={{
                   color: 'inherit',
                   textDecoration: 'none',
@@ -649,7 +649,7 @@ export default function TrackPage({ params }: Props) {
         <div className="inner track-nav">
           {prevTrack ? (
             <Link
-              href={`/musique/${prevTrack.slug}`}
+              href={`/music/${prevTrack.slug}`}
               style={{
                 textDecoration: 'none',
                 display: 'flex',
@@ -706,7 +706,7 @@ export default function TrackPage({ params }: Props) {
           )}
 
           <Link
-            href="/musique"
+            href="/music"
             style={{
               fontFamily: 'Raleway',
               fontWeight: 700,
@@ -726,7 +726,7 @@ export default function TrackPage({ params }: Props) {
 
           {nextTrack ? (
             <Link
-              href={`/musique/${nextTrack.slug}`}
+              href={`/music/${nextTrack.slug}`}
               style={{
                 textDecoration: 'none',
                 display: 'flex',
@@ -817,7 +817,7 @@ export default function TrackPage({ params }: Props) {
               Le Livre
             </Link>
             <Link
-              href="/musique"
+              href="/music"
               style={{
                 fontFamily: 'Raleway',
                 fontSize: 11,
